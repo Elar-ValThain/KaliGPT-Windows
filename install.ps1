@@ -23,8 +23,8 @@ $Colors = @{
 function Print-Status {
     param([string]$Message, [string]$Type = "info")
     switch ($Type) {
-        "success" { Write-Host "$($Colors.Green)[✓]$($Colors.Reset) $Message" }
-        "error"   { Write-Host "$($Colors.Red)[✗]$($Colors.Reset) $Message" -ForegroundColor Red }
+        "success" { Write-Host "$($Colors.Green)[+]$($Colors.Reset) $Message" }
+        "error"   { Write-Host "$($Colors.Red)[!]$($Colors.Reset) $Message" -ForegroundColor Red }
         "warn"    { Write-Host "$($Colors.Yellow)[!]$($Colors.Reset) $Message" }
         "info"    { Write-Host "$($Colors.Cyan)[+]$($Colors.Reset) $Message" }
     }
@@ -64,12 +64,13 @@ if (Test-Path $InstallDir) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-# Clone repository
+# Clone repository (original SudoHopeX/KaliGPT)
 Print-Status "Cloning KaliGPT repository..." "info"
 cd $InstallDir
 try {
-    git clone https://github.com/Elar-ValThain/KaliGPT-Windows.git . 2>&1 | Out-Null
-    Print-Status "Repository cloned successfully" "success"
+    git clone https://github.com/SudoHopeX/KaliGPT.git . 2>&1 | Out-Null
+    git checkout hackerx 2>&1 | Out-Null
+    Print-Status "Repository cloned successfully (branch: hackerx)" "success"
 } catch {
     Print-Status "Failed to clone repository: $_" "error"
     exit 1
@@ -82,7 +83,7 @@ try {
     git clone https://github.com/SudoHopeX/OpenSearchAPI.git $OpenSearchDir 2>&1 | Out-Null
     Print-Status "OpenSearchAPI cloned successfully" "success"
 } catch {
-    Print-Status "Failed to clone OpenSearchAPI: $_" "error"
+    Print-Status "Failed to clone OpenSearchAPI: $_" "warn"
 }
 
 # Create virtual environment
@@ -119,11 +120,11 @@ if (-not $SkipOllama) {
     if ($response -eq 'y' -or $response -eq 'Y') {
         Print-Status "Installing Ollama..." "info"
         try {
-            Invoke-WebRequest -Uri "https://ollama.com/download/windows" -OutFile "$env:TEMP\OllamaSetup.exe"
+            Invoke-WebRequest -Uri "https://ollama.com/download/windows" -OutFile "$env:TEMP\OllamaSetup.exe" -ErrorAction Stop
             & "$env:TEMP\OllamaSetup.exe" /S
-            Print-Status "Ollama installed. Please restart your computer and then pull a model using: ollama pull llama3" "success"
+            Print-Status "Ollama installer downloaded. Please run it manually or restart to complete installation." "success"
         } catch {
-            Print-Status "Failed to install Ollama: $_" "warn"
+            Print-Status "Could not download Ollama. Visit https://ollama.com/download/windows manually." "warn"
         }
     }
 }
@@ -139,37 +140,23 @@ if ($SetupKeys) {
 
 # Create Windows batch launcher
 Print-Status "Creating KaliGPT command launcher..." "info"
-$LauncherPath = "$env:USERPROFILE\AppData\Local\Programs\Python\Scripts\kaligpt.cmd"
-$LauncherDir = Split-Path $LauncherPath
+$LauncherDir = "$env:USERPROFILE\AppData\Local\Programs\Python\Scripts"
+$LauncherPath = Join-Path $LauncherDir "kaligpt.cmd"
 
 if (-not (Test-Path $LauncherDir)) {
     New-Item -ItemType Directory -Path $LauncherDir -Force | Out-Null
 }
 
+# Create launcher as here-string (not embedded batch)
 $LauncherContent = @"
 @echo off
-REM KaliGPT v1.3 Launcher Script for Windows
-REM by SudoHopeX | Adapted for Windows 11
-
 setlocal enabledelayedexpansion
-
 set KALIGPT_HOME=$InstallDir
 set VENV_PATH=!KALIGPT_HOME!\.venv
 set SCRIPTS_PATH=!VENV_PATH!\Scripts
-
-REM Activate virtual environment
 call "!SCRIPTS_PATH!\activate.bat"
-
-REM Change to KaliGPT directory
 cd /d "!KALIGPT_HOME!"
-
-REM Start OpenSearchAPI in background (optional)
-start "" python OpenSearchAPI/app.py
-
-REM Run KaliGPT
 python -m agents %*
-
-pause
 "@
 
 Set-Content -Path $LauncherPath -Value $LauncherContent -Encoding ASCII
